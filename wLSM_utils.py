@@ -34,7 +34,7 @@ def get_latent_positions(sample):
     """
     return np.array(list(map(hardy_weinberg, sample)))
 
-def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], acorn=None):
+def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], truncated=False, acorn=None):
     """
     zero-inflated Z_+ weighted LSM network (model & methods)
 
@@ -69,6 +69,10 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], acorn
     t = sample(n, density, params)
 
     X = get_latent_positions(t)
+    
+    if truncated:
+    	X = X[:, :2]
+
     P = X @ X.T
 
     A0 = sbm(np.ones(n).astype(int), P)
