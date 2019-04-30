@@ -69,7 +69,7 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], trunc
     t = sample(n, density, params)
 
     X = get_latent_positions(t)
-    
+
     if truncated:
     	X = X[:, :2]
 
