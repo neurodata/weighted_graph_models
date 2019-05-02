@@ -92,15 +92,15 @@ def quadratic_log_likelihood(data, params, curve_density=False):
     for i in range(n):
         log_likelihood += np.log(norm.pdf(residuals[i], fitted_Z[i], std))
         
-    if curve_density:
-        log_A = 0
-    else:
-        maxes = np.array([max(data[:, i]) for i in range(data.shape[1] - 1)])
-        mins = np.array([min(data[:, i]) for i in range(data.shape[1] - 1)])
-        area = np.prod(maxes - mins)
-        log_A = temp_n * np.log(1/area)
+    #if curve_density:
+    #    log_A = 0
+    #else:
+    #    maxes = np.array([max(data[:, i]) for i in range(data.shape[1] - 1)])
+    #    mins = np.array([min(data[:, i]) for i in range(data.shape[1] - 1)])
+    #    area = np.prod(maxes - mins)
+    #    log_A = n * np.log(1/area)
         
-    return log_likelihood + log_A
+    return log_likelihood
 
 def func(data, a, b, c):
     if data.ndim == 1:
@@ -165,6 +165,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     ari_ = ari(c, temp_c_hat)
     bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
     
+    print(likeli, ari_, bic_)
     return [combo, likeli, ari_, bic_]
 
 X = np.array([0.2, 0.2, 0.2])
@@ -208,7 +209,7 @@ condensed_func = lambda combo : for_loop_function(combo, X_hat, est_labels, true
 results = Parallel(n_jobs=-2)(delayed(condensed_func)(combo) for combo in combos[1:])
 
 new_combos = [None]
-for _ in combos[1:]:
+for i in range(len(combos[1:])):
     new_combos.append(results[i][0])
     loglikelihoods.append(results[i][1])
     aris.append(results[i][2])
