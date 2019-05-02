@@ -165,7 +165,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     ari_ = ari(c, temp_c_hat)
     bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
     
-    return [likeli, ari_, bic_]
+    return [combo, likeli, ari_, bic_]
 
 X = np.array([0.2, 0.2, 0.2])
 density = np.random.uniform
@@ -204,23 +204,21 @@ for k in range(len(unique_labels)):
 
 M = 10**8
 
-results = Parallel(n_jobs=8)(delayed(for_loop_function(combo, 
-                                                        X_hat, 
-                                                        est_labels, 
-                                                        true_labels, 
-                                                        gclust_model, 
-                                                        M)) for combo in combos[1:])
+condensed_func = lambda combo : for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M)
+results = Parallel(n_jobs=-2)(delayed(condensed_func)(combo) for combo in combos[1:])
 
+new_combos = [None]
 for _ in combos[1:]:
-    loglikelihoods.append(results[i][0])
-    aris.append(results[i][1])
-    bic.append(results[i][2])
+    new_combos.append(results[i][0])
+    loglikelihoods.append(results[i][1])
+    aris.append(results[i][2])
+    bic.append(results[i][3])
 
 import _pickle as pickle
 pickle.dump(bic, open('bic_cyclops_par.pkl', 'wb'))
 pickle.dump(aris, open('aris_cyclops_par.pkl', 'wb'))
 pickle.dump(loglikelihoods, open('loglikelihoods_cyclops_par.pkl', 'wb'))
-pickle.dump(combos, open('combos_cyclops_par.pkl', 'wb'))
+pickle.dump(new_combos, open('combos_cyclops_par.pkl', 'wb'))
 
 
 
