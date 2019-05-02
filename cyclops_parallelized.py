@@ -132,8 +132,9 @@ def monte_carlo_integration(data, func, params, M, acorn=None):
     return estimated_integral
 
 def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
+    print(combo)
     n, d = X_hat.shape
-    unique_labels = np.unique_labels(est_labels)
+    unique_labels = np.unique(est_labels)
     K = len(unique_labels)
 
     class_idx = np.array([np.where(c_hat == u)[0] for u in unique_labels])
@@ -154,7 +155,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :2], X_hat[temp_quad_labels, 2])
     
     integral = monte_carlo_integration(X_hat[temp_quad_labels], func, params, M)
-    temp_density = 1/integral
+    temp_density = 1/abs(integral)
     
     quad_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
     quad_log_likelihood += temp_n * np.log(temp_density)
@@ -162,8 +163,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
 
     likeli = quad_log_likelihood + gmm_log_likelihood
     ari_ = ari(c, temp_c_hat)
-    bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n -
-                    temp_n_params * np.log(n)
+    bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
     
     return [likeli, ari_, bic_]
 
@@ -192,11 +192,13 @@ est_labels = gclust.fit_predict(X_hat)
 
 loglikelihoods = [np.sum(gclust.model_.score_samples(X_hat))]
 combos = [None]
-aris = [ari(c, c_hat)]
+aris = [ari(c, est_labels)]
 bic = [gclust.model_.bic(X_hat)]
 
+unique_labels = np.unique(est_labels)
+
 for k in range(len(unique_labels)):
-    for combo in list(combinations(np.unique(c_hat), k+1)):
+    for combo in list(combinations(np.unique(est_labels), k+1)):
         combo = np.array(list(combo)).astype(int)
         combos.append(combo)
 
@@ -207,7 +209,7 @@ results = Parallel(n_jobs=8)(delayed(for_loop_function(combo,
                                                         est_labels, 
                                                         true_labels, 
                                                         gclust_model, 
-                                                        M)) for combo in combos)
+                                                        M)) for combo in combos[1:])
 
 for _ in combos[1:]:
     loglikelihoods.append(results[i][0])
