@@ -154,11 +154,10 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     
     params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :2], X_hat[temp_quad_labels, 2])
     
-    integral = monte_carlo_integration(X_hat[temp_quad_labels], func, params, M)
-    temp_density = 1/abs(integral)
+    integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
     
     quad_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
-    quad_log_likelihood += temp_n * np.log(temp_density)
+    quad_log_likelihood -= temp_n * np.log(integral)
     gmm_log_likelihood = np.sum(gclust.model_.score_samples(X_hat[-temp_quad_labels]))
 
     likeli = quad_log_likelihood + gmm_log_likelihood
