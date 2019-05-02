@@ -137,6 +137,7 @@ unique_labels = np.unique(c_hat)
 K = len(unique_labels)
 M = 10**8
 
+print(np.arange(K))
 class_idx = np.array([np.where(c_hat == u)[0] for u in unique_labels])
 
 loglikelihoods = [np.sum(gclust.model_.score_samples(X_hat))]
