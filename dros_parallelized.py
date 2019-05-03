@@ -57,11 +57,11 @@ def generate_cyclops(X, n, pi, density=None, density_params=[0,1], acorn=None):
 
 def quadratic(data, params):
     if data.ndim == 1:
-        sum_ = np.sum(data[:-1]**2 * params[:-1]) + params[-1]
+        sums_ = np.sum(data[:-1]**2 * params[:-1]) + params[-1]
         return sum_
     elif data.ndim == 2:
-        sums = np.sum(data[:, :-1]**2 * params[:-1], axis = 1) + params[-1]
-        return sums
+        sum_ = np.sum(data[:, :-1]**2 * params[:-1], axis = 1) + params[-1]
+        return sum_
     else:
         raise ValueError("unsuppored data")
         
@@ -78,7 +78,12 @@ def quadratic_log_likelihood(data, params, curve_density=False):
     return log_likelihood
 
 def func(data, a,b,c,d,e,f):
-    sum_ = a*(data[:, 0])**2 + b*data[:, 1]**2 + c*(data[:, 2])**2 + d*data[:, 3]**2 + e*(data[:, 4])**2 + f
+    if data.ndim == 1:
+        sum_ = a*data[0]**2 + b*data[1]**2 + c*data[2]**2
+        sum_ += d*data[3]**2 + e*data[4]**2 + f
+    else:
+        sum_ = a*(data[:, 0])**2 + b*data[:, 1]**2 + c*(data[:, 2])**2 
+        sum_ += d*data[:, 3]**2 + e*(data[:, 4])**2 + f
     return sum_
 
 def monte_carlo_integration(data, func, params, M, acorn=None):
@@ -99,7 +104,7 @@ def monte_carlo_integration(data, func, params, M, acorn=None):
         
     sum_f = 0
     for it in range(M):
-        sum_f += func(sample[it, :], params[0], params[1], params[2])
+        sum_f += func(sample[it, :], *params)
         
     estimated_integral = (area)*(1/M)*sum_f
     
@@ -111,7 +116,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     unique_labels = np.unique(est_labels)
     K = len(unique_labels)
 
-    class_idx = np.array([np.where(c_hat == u)[0] for u in unique_labels])
+    class_idx = np.array([np.where(est_labels == u)[0] for u in unique_labels])
     temp_quad_labels = np.concatenate(class_idx[combo])
 
     temp_n = len(temp_quad_labels)
@@ -123,10 +128,10 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     temp_n_params = temp_quad_params + temp_K - 1
     
     temp_label = min(combo)
-    temp_c_hat = c_hat.copy()
+    temp_c_hat = est_labels.copy()
     temp_c_hat[temp_quad_labels] = temp_label
     
-    params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :2], X_hat[temp_quad_labels, 2])
+    params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :-1], X_hat[temp_quad_labels, -1])
     
     integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
     
@@ -135,7 +140,7 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     gmm_log_likelihood = np.sum(gclust.model_.score_samples(X_hat[-temp_quad_labels]))
 
     likeli = quad_log_likelihood + gmm_log_likelihood
-    ari_ = ari(c, temp_c_hat)
+    ari_ = ari(true_labels, temp_c_hat)
     bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
     
     return [combo, likeli, ari_, bic_]
@@ -145,7 +150,7 @@ A = binarize(right_adj)
 X_hat = np.concatenate(ASE(n_components=3).fit_transform(A), axis=1)
 n, d = X_hat.shape
 
-gclust_model = GCLUST(max_components=8)
+gclust = GCLUST(max_components=8)
 est_labels = gclust.fit_predict(X_hat)
 
 loglikelihoods = [np.sum(gclust.model_.score_samples(X_hat))]
@@ -160,10 +165,10 @@ for k in range(len(unique_labels)):
         combo = np.array(list(combo)).astype(int)
         combos.append(combo)
 
-M = 10**9
+M = 10**8
 
-condensed_func = lambda combo : for_loop_function(combo, X_hat, est_labels, right_labels, gclust_model, M)
-results = Parallel(n_jobs=-2)(delayed(condensed_func)(combo) for combo in combos[1:])
+condensed_func = lambda combo : for_loop_function(combo, X_hat, est_labels, right_labels, gclust, M)
+results = Parallel(n_jobs=10)(delayed(condensed_func)(combo) for combo in combos[1:])
 
 new_combos = [None]
 for i in range(len(combos[1:])):
