@@ -160,6 +160,8 @@ bic = [gclust.model_.bic(X_hat)]
 
 unique_labels = np.unique(est_labels)
 
+class_idx = np.array([np.where(est_labels == u)[0] for u in unique_labels])
+
 for k in range(len(unique_labels)):
     for combo in list(combinations(np.unique(est_labels), k+1)):
         combo = np.array(list(combo)).astype(int)
@@ -178,6 +180,7 @@ for i in range(len(combos[1:])):
     bic.append(results[i][3])
 
 import _pickle as pickle
+pickle.dump(class_idx, open('clas_idx_dros_par.pkl', 'wb'))
 pickle.dump(bic, open('bic_dros_par.pkl', 'wb'))
 pickle.dump(aris, open('aris_dros_par.pkl', 'wb'))
 pickle.dump(loglikelihoods, open('loglikelihoods_dros_par.pkl', 'wb'))
