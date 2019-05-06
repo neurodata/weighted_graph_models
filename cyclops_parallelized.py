@@ -122,8 +122,8 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     temp_n_params = temp_quad_params + temp_K - 1
     
     temp_label = min(combo)
-    new_counts = np.zeros(K - len(combo))
-    for i in range(new_props):
+    new_counts = np.zeros(temp_K)
+    for i in range(new_counts):
         if unique_labels[i] == temp_label:
             new_counts = surface_count
         else:

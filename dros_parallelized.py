@@ -77,13 +77,34 @@ def quadratic_log_likelihood(data, params, curve_density=False):
         
     return log_likelihood
 
-def func(data, a,b,c,d,e,f):
+def func(data, *args):
+    n, d = data.shape
+    n_params = len(args)
+    sum_ = 0
     if data.ndim == 1:
-        sum_ = a*data[0]**2 + b*data[1]**2 + c*data[2]**2
-        sum_ += d*data[3]**2 + e*data[4]**2 + f
+        # Leading terms
+        sum_ = np.sum(data[:d]**2 * args[:d])
+
+        # Cross-terms
+        data_newaxis = data[:, np.newaxis]
+        broadcasted = data_newaxis * data_newaxis
+        products = broadcasted[np.triu_indices(broadcasted.shape[0], 1)]
+        sum_ += np.sum(products * params[d:-1])
+
+        # Constant
+        sum_ += args[-1]
     else:
-        sum_ = a*(data[:, 0])**2 + b*data[:, 1]**2 + c*(data[:, 2])**2 
-        sum_ += d*data[:, 3]**2 + e*(data[:, 4])**2 + f
+        # Leading terms
+        sum_ = np.sum(data[:d]**2 * args[:d])
+
+        # Cross-terms
+        data_newaxis = data[:, np.newaxis]
+        broadcasted = data_newaxis * data_newaxis
+        products = broadcasted[np.triu_indices(broadcasted.shape[0], 1)]
+        sum_ += np.sum(products * params[d:-1])
+
+        # Constant
+        sum_ += args[-1]
     return sum_
 
 def monte_carlo_integration(data, func, params, M, acorn=None):
@@ -112,39 +133,75 @@ def monte_carlo_integration(data, func, params, M, acorn=None):
 
 def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     print(combo)
+
+    # Grab number of data points and dimension of data
     n, d = X_hat.shape
+
+    # Grab cluster labels and corresponding counts and the number of clusters
     unique_labels, counts = np.unique(est_labels, return_counts=True)
     K = len(unique_labels)
 
+    # Partition the data by cluster
     class_idx = np.array([np.where(est_labels == u)[0] for u in unique_labels])
-    temp_quad_labels = np.concatenate(class_idx[combo])
-    surface_count = np.sum(counts[combo])
 
+    # Combine clusters in combo into a single cluster
+    temp_quad_labels = np.concatenate(class_idx[combo])
+
+    # Grab the number of data included in the surface
+    surface_count = np.sum(counts[combo])
     temp_n = len(temp_quad_labels)
-    temp_K = K - len(combo)
-    temp_mean_params = temp_K * d
-    temp_cov_params = temp_K * d * (d + 1) / 2
-    temp_quad_params = (d - 1)*2 + d - 1 + (d - 1) * (d - 2) / 2 + 1
-    temp_n_params = temp_mean_params + temp_cov_params
-    temp_n_params = temp_quad_params + temp_K - 1
+
+    assert temp_n == surface_count
+
+    temp_K = K - len(combo) + 1 # new number of "clusters"
+    temp_mean_params = (temp_K - 1) * d # temp_K - 1 means in d space
+    temp_cov_params = (temp_K - 1) * d * (d - 1) / 2 # temp_K - 1 symmetric covariances in M^{d x d}
+    temp_quad_params = (d - 1) + 1 + 1 # polynomial parameters + variance off surface
+
+    #- Total parameters = parameters from gaussians + parameters from surface
+    temp_n_params = temp_mean_params + temp_cov_params 
+    temp_n_params += temp_quad_params + temp_K - 1 # Include mixing proportions
+
+    #- New counts vector
+    new_counts = np.zeros(temp_K)
+    for i in range(new_counts):
+        if unique_labels[i] == temp_label:
+            new_counts = surface_count
+        else:
+            new_counts = counts[i]
+
+    #- New proportions vector
+    new_props = (new_count / n)**new_counts
+
+    #- For BIC
+    prop_log_likelihoods = np.sum(np.log(new_props))
     
+    #- Give each cluster in combos the label of the smallest label in combos
     temp_label = min(combo)
     temp_c_hat = est_labels.copy()
     temp_c_hat[temp_quad_labels] = temp_label
     
+    #- Find fitted surface
     params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :-1], X_hat[temp_quad_labels, -1])
     
+    #- Estimate surface area (comutationally expensive!!!)
     integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
     
+    #- Find likelihood of surface
     surface_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
-    surface_log_likelihood -= temp_n * np.log(integral)
-    surface_log_likelihood += temp_n * surface_count/n
+    surface_log_likelihood -= surface_count * np.log(integral)
 
+    #- Find likelihood of Gaussians
     gmm_log_likelihood = np.sum(gclust.model_.score(X_hat[-temp_quad_labels]))
 
-    likeli = surface_log_likelihood + gmm_log_likelihood
-    ari_ = ari(true_labels, temp_c_hat)
+    #- Total likelihood
+    likeli = surface_log_likelihood + gmm_log_likelihood + prop_log_likelihoods
+
+    #- BIC
     bic_ = 2*likeli - temp_n_params * np.log(n)
+
+    #- ARI
+    ari_ = ari(true_labels, temp_c_hat)
     
     return [combo, likeli, ari_, bic_]
 
@@ -183,6 +240,7 @@ for i in range(len(combos[1:])):
     bic.append(results[i][3])
 
 import _pickle as pickle
+pickle.dump(X_hat, open('X_hat_dros_par.pkl', 'wb'))
 pickle.dump(class_idx, open('class_idx_dros_par.pkl', 'wb'))
 pickle.dump(bic, open('bic_dros_par.pkl', 'wb'))
 pickle.dump(aris, open('aris_dros_par.pkl', 'wb'))
