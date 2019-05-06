@@ -50,28 +50,6 @@ def generate_cyclops(X, n, pi, density=None, density_params=[0,1], acorn=None):
     
     return A, counts
 
-X = np.array([0.2, 0.2, 0.2])
-density = np.random.uniform
-density_params = np.array([[0.3, 0.4],[0.3, 0.35]])
-
-n = 1000
-pi = 0.9
-
-A, counts = generate_cyclops(X, n, pi, None)
-c = [0]*counts[0]
-c += [1]*counts[1]
-
-ase = ASE(n_components=3)
-X_hat = ase.fit_transform(A)
-
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(X_hat[:, 0], X_hat[:, 1], X_hat[:, 2], c=c)
-
-gclust = GCLUST(max_components=4)
-c_hat = gclust.fit_predict(X_hat)
-
 def quadratic(data, params):
     if data.ndim == 1:
         sum_ = np.sum(data[:-1]**2 * params[:-1]) + params[-1]
@@ -91,14 +69,6 @@ def quadratic_log_likelihood(data, params, curve_density=False):
     log_likelihood = 0
     for i in range(n):
         log_likelihood += np.log(norm.pdf(residuals[i], fitted_Z[i], std))
-        
-    #if curve_density:
-    #    log_A = 0
-    #else:
-    #    maxes = np.array([max(data[:, i]) for i in range(data.shape[1] - 1)])
-    #    mins = np.array([min(data[:, i]) for i in range(data.shape[1] - 1)])
-    #    area = np.prod(maxes - mins)
-    #    log_A = n * np.log(1/area)
         
     return log_likelihood
 
@@ -134,11 +104,14 @@ def monte_carlo_integration(data, func, params, M, acorn=None):
 def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     print(combo)
     n, d = X_hat.shape
-    unique_labels = np.unique(est_labels)
+    unique_labels, counts = np.unique(est_labels, return_counts=True)
     K = len(unique_labels)
 
     class_idx = np.array([np.where(c_hat == u)[0] for u in unique_labels])
     temp_quad_labels = np.concatenate(class_idx[combo])
+
+    surface_count = np.sum(counts[temp_quad_labels])
+    surface_prop = surface_count/n
 
     temp_n = len(temp_quad_labels)
     temp_K = K - len(combo)
@@ -149,6 +122,16 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     temp_n_params = temp_quad_params + temp_K - 1
     
     temp_label = min(combo)
+    new_counts = np.zeros(K - len(combo))
+    for i in range(new_props):
+        if unique_labels[i] == temp_label:
+            new_counts = surface_count
+        else:
+            new_counts = counts[i]
+
+    new_props = (surface_count / n)**counts
+    prop_log_likelihoods = np.sum(np.log(new_props))
+
     temp_c_hat = c_hat.copy()
     temp_c_hat[temp_quad_labels] = temp_label
     
@@ -160,16 +143,16 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     quad_log_likelihood -= temp_n * np.log(integral)
     gmm_log_likelihood = np.sum(gclust.model_.score_samples(X_hat[-temp_quad_labels]))
 
-    likeli = quad_log_likelihood + gmm_log_likelihood
+    log_likeli = quad_log_likelihood + gmm_log_likelihood + prop_log_likelihoods
+    
+    bic_ = 2*log_likeli - temp_n_params * np.log(n)
+
     ari_ = ari(c, temp_c_hat)
-    bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
     
     print(likeli, ari_, bic_)
     return [combo, likeli, ari_, bic_]
 
 X = np.array([0.2, 0.2, 0.2])
-density = np.random.uniform
-density_params = np.array([[0.3, 0.4],[0.3, 0.35]])
 
 n = 1000
 pi = 0.9
@@ -182,10 +165,6 @@ true_labels = c
 
 ase = ASE(n_components=3)
 X_hat = ase.fit_transform(A)
-
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-ax.scatter(X_hat[:, 0], X_hat[:, 1], X_hat[:, 2], c=c)
 
 gclust_model = GCLUST(max_components=8)
 est_labels = gclust.fit_predict(X_hat)
@@ -207,7 +186,7 @@ for k in range(len(unique_labels)):
 M = 10**8
 
 condensed_func = lambda combo : for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M)
-results = Parallel(n_jobs=-2)(delayed(condensed_func)(combo) for combo in combos[1:])
+results = Parallel(n_jobs=15)(delayed(condensed_func)(combo) for combo in combos[1:])
 
 new_combos = [None]
 for i in range(len(combos[1:])):
@@ -217,6 +196,8 @@ for i in range(len(combos[1:])):
     bic.append(results[i][3])
 
 import _pickle as pickle
+pickle.dump(true_labels, open('true_labels_cyclops_par.pkl', 'wb'))
+pickle.dump(est_labels, open('est_labels_cyclops_par.pkl', 'wb'))
 pickle.dump(class_idx, open('class_idx_cyclops_par.pkl', 'wb'))
 pickle.dump(bic, open('bic_cyclops_par.pkl', 'wb'))
 pickle.dump(aris, open('aris_cyclops_par.pkl', 'wb'))
