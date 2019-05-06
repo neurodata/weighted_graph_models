@@ -113,11 +113,12 @@ def monte_carlo_integration(data, func, params, M, acorn=None):
 def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     print(combo)
     n, d = X_hat.shape
-    unique_labels = np.unique(est_labels)
+    unique_labels, counts = np.unique(est_labels, return_counts=True)
     K = len(unique_labels)
 
     class_idx = np.array([np.where(est_labels == u)[0] for u in unique_labels])
     temp_quad_labels = np.concatenate(class_idx[combo])
+    surface_count = np.sum(counts[combo])
 
     temp_n = len(temp_quad_labels)
     temp_K = K - len(combo)
@@ -135,13 +136,15 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     
     integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
     
-    quad_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
-    quad_log_likelihood -= temp_n * np.log(integral)
-    gmm_log_likelihood = np.sum(gclust.model_.score_samples(X_hat[-temp_quad_labels]))
+    surface_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
+    surface_log_likelihood -= temp_n * np.log(integral)
+    surface_log_likelihood += temp_n * surface_count/n
 
-    likeli = quad_log_likelihood + gmm_log_likelihood
+    gmm_log_likelihood = np.sum(gclust.model_.score(X_hat[-temp_quad_labels]))
+
+    likeli = surface_log_likelihood + gmm_log_likelihood
     ari_ = ari(true_labels, temp_c_hat)
-    bic_ = 2*gmm_log_likelihood*(n - temp_n) + 2*quad_log_likelihood*temp_n - temp_n_params * np.log(n)
+    bic_ = 2*likeli - temp_n_params * np.log(n)
     
     return [combo, likeli, ari_, bic_]
 
@@ -150,7 +153,7 @@ A = binarize(right_adj)
 X_hat = np.concatenate(ASE(n_components=3).fit_transform(A), axis=1)
 n, d = X_hat.shape
 
-gclust = GCLUST(max_components=8)
+gclust = GCLUST(max_components=15)
 est_labels = gclust.fit_predict(X_hat)
 
 loglikelihoods = [np.sum(gclust.model_.score_samples(X_hat))]
@@ -180,7 +183,7 @@ for i in range(len(combos[1:])):
     bic.append(results[i][3])
 
 import _pickle as pickle
-pickle.dump(class_idx, open('clas_idx_dros_par.pkl', 'wb'))
+pickle.dump(class_idx, open('class_idx_dros_par.pkl', 'wb'))
 pickle.dump(bic, open('bic_dros_par.pkl', 'wb'))
 pickle.dump(aris, open('aris_dros_par.pkl', 'wb'))
 pickle.dump(loglikelihoods, open('loglikelihoods_dros_par.pkl', 'wb'))
