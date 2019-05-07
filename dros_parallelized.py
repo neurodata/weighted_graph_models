@@ -95,11 +95,12 @@ def func(data, *args):
         sum_ += args[-1]
     else:
         # Leading terms
-        sum_ = np.sum(data[:d]**2 * args[:d])
+        sum_ = np.sum(data[:, :d]**2 * args[:d])
 
         # Cross-terms
-        data_newaxis = data[:, np.newaxis]
+        data_newaxis = data[:, :, np.newaxis]
         broadcasted = data_newaxis * data_newaxis
+        print(broadcasted.shape)
         products = broadcasted[np.triu_indices(broadcasted.shape[0], 1)]
         sum_ += np.sum(products * params[d:-1])
 
@@ -161,28 +162,28 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     #- Total parameters = parameters from gaussians + parameters from surface
     temp_n_params = temp_mean_params + temp_cov_params 
     temp_n_params += temp_quad_params + temp_K - 1 # Include mixing proportions
+    
+    #- Give each cluster in combos the label of the smallest label in combos
+    temp_label = min(combo)
+    temp_c_hat = est_labels.copy()
+    temp_c_hat[temp_quad_labels] = temp_label
 
     #- New counts vector
     new_counts = np.zeros(temp_K)
-    for i in range(new_counts):
+    for i in range(temp_K):
         if unique_labels[i] == temp_label:
             new_counts = surface_count
         else:
             new_counts = counts[i]
 
     #- New proportions vector
-    new_props = (new_count / n)**new_counts
+    new_props = (new_counts / n)**new_counts
 
     #- For BIC
     prop_log_likelihoods = np.sum(np.log(new_props))
-    
-    #- Give each cluster in combos the label of the smallest label in combos
-    temp_label = min(combo)
-    temp_c_hat = est_labels.copy()
-    temp_c_hat[temp_quad_labels] = temp_label
-    
+    guess = (1,1,1,1,1,1,1,1,1,1) 
     #- Find fitted surface
-    params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :-1], X_hat[temp_quad_labels, -1])
+    params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :-1], X_hat[temp_quad_labels, -1], guess)
     
     #- Estimate surface area (comutationally expensive!!!)
     integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
