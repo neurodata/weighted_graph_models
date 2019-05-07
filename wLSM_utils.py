@@ -2,6 +2,9 @@ from graspy.embed import AdjacencySpectralEmbed as ASE
 from graspy.cluster import GaussianCluster as GCLUST
 from graspy.simulations import sbm
 
+from scipy.special import factorial
+from scipy.spatial.distance import pdist, squareform
+
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -138,3 +141,15 @@ def wHardy_Weinberg(
     ase1.fit(W1)
 
     return ase0, ase1
+
+def calculate_simplex_content(points):
+    j = points.shape[0] - 1
+    dist = squareform(pdist(points))
+    dist = dist ** 2
+    new_dist = np.ones((dist.shape[0] + 1, dist.shape[1] + 1))
+    new_dist[1:, 1:] = dist
+    new_dist[0, 0] = 0
+    det = np.linalg.det(new_dist)
+    det /= 2 ** j
+    det /= factorial(j) ** 2
+    return np.sqrt(np.abs(det))
