@@ -7,11 +7,45 @@ import matplotlib.pyplot as plt
 
 from graspy.plot import pairplot
 
+
+def concentration_regularize(graph, sum_edges=False, weight=1):
+    if sum_edges:
+        d = weight * np.mean(graph)
+    else:
+        d = weight * np.count_nonzero(graph) / graph.size
+    ones = np.ones(graph.shape[0])
+    if sum_edges:
+        d_vec = np.sum(graph, axis=0)
+    else:
+        d_vec = np.count_nonzero(graph, axis=0)
+    lam_vec = np.minimum(2 * d / d_vec, ones)
+    lam_mat = np.sqrt(np.outer(lam_vec, lam_vec))
+    return lam_mat
+
+
+def sample_hw_latent(
+    n, density=np.random.uniform, params=[0, 1], truncated=False, acorn=None
+):
+    if acorn is None:
+        acorn = np.random.randint(10 ** 6)
+
+    np.random.seed(acorn)
+
+    t = sample(n, density, params)
+
+    X = get_latent_positions(t)
+
+    if truncated:
+        X = X[:, :2]
+    return X
+
+
 def hardy_weinberg(theta):
     """
     Maps a value from [0, 1] to the hardy weinberg curve.
     """
-    return [theta**2, 2*theta*(1-theta), (1 - theta)**2]
+    return [theta ** 2, 2 * theta * (1 - theta), (1 - theta) ** 2]
+
 
 def sample(shape, function, params):
     """
@@ -23,10 +57,11 @@ def sample(shape, function, params):
         if params.shape == shape:
             samples = np.ones(shape)
             for i in range(shape[0]):
-                for j in range(i+1, shape[0]):
-                    samples[i,j] = function(params[i,j], 1)
-                    samples[j,i] = samples[i,j]
+                for j in range(i + 1, shape[0]):
+                    samples[i, j] = function(params[i, j], 1)
+                    samples[j, i] = samples[i, j]
             return samples
+
 
 def get_latent_positions(sample):
     """
@@ -34,7 +69,10 @@ def get_latent_positions(sample):
     """
     return np.array(list(map(hardy_weinberg, sample)))
 
-def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], truncated=False, acorn=None):
+
+def wHardy_Weinberg(
+    n, m, c0, c1, density=np.random.uniform, params=[0, 1], truncated=False, acorn=None
+):
     """
     zero-inflated Z_+ weighted LSM network (model & methods)
 
@@ -43,7 +81,7 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], trunc
     Let h: [0,1] to R^d and X_i = h(T_i) so that the latent positions lie on a one-dimensional curve in R^d.
     (start with h(t) = [t^2 , 2t(1-t) , (1-t)^2]^{T} so the X_i's are on Hardy-Weinberg in Delta^2 subset [0,1]^3 subset R^3.)
     (for sanity check: do ase(G) into R^3 for such an LSM, and you should get Xhat's around HW (up to orthogonal transformation).)
-    Let p_ij = X_i^{T} X_j.
+    Let p_ij = X_i^{T} X_j
     Let B_ij ~ Bernoulli(p_ij) and Z_ij ~ G(p_ij) be independent -- independent of each other, and independent across ij.
     Let W_ij = Z_ij * I{B_ij}, so W_ij is 0-inflated -- 0 with probability 1 - p_ij and weighted otherwise.
     (start with G(p_ij) = Poisson(c0 * p_ij) so we have a 0-inflated Poisson LSM.) 
@@ -60,8 +98,8 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], trunc
     """
 
     if acorn is None:
-        acorn = np.random.randint(10**6)
-    
+        acorn = np.random.randint(10 ** 6)
+
     np.random.seed(acorn)
     V = range(n)
     V1 = np.random.choice(V, m, replace=False)
@@ -69,25 +107,25 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], trunc
     t = sample(n, density, params)
 
     X = get_latent_positions(t)
-    
+
     if truncated:
-    	X = X[:, :2]
+        X = X[:, :2]
 
     P = X @ X.T
 
     A0 = sbm(np.ones(n).astype(int), P)
 
     pois = np.random.poisson
-    L0 = c0*np.ones((n,n))*P
-    
-    Z0 = sample((n,n), pois, L0)
+    L0 = c0 * np.ones((n, n)) * P
+
+    Z0 = sample((n, n), pois, L0)
     W0 = A0 * Z0
 
-    L1 = c1*np.ones((n,n))*P
+    L1 = c1 * np.ones((n, n)) * P
     A1 = sbm(np.ones(n).astype(int), P)
 
-    Z1 = sample((n,n), pois, L0)
-    transplant = sample((n,n), pois, L1)
+    Z1 = sample((n, n), pois, L0)
+    transplant = sample((n, n), pois, L1)
 
     Z1[np.ix_(V1, V1)] = transplant[np.ix_(V1, V1)]
 
@@ -98,5 +136,5 @@ def wHardy_Weinberg(n, m, c0, c1, density=np.random.uniform, params=[0,1], trunc
 
     ase1 = ASE(n_components=min(100, n - 1))
     ase1.fit(W1)
-    
+
     return ase0, ase1
