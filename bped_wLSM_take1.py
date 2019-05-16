@@ -79,7 +79,7 @@ graph_embed = graph_w
 # graph_embed = augment_diagonal(graph_embed)
 # graph_embed += 1 / graph_embed.size
 # graph_embed = symmetrize(graph_embed)
-# lam_mat = concentration_regularize(graph_w, sum_edges=True, weight=10)
+lam_mat = concentration_regularize(graph_w, sum_edges=True, weight=10)
 # graph_embed = graph_w * lam_mat
 heatmap(graph_embed)
 # graph_embed = pass_to_ranks(graph_embed)
