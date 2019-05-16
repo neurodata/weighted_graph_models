@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 
 from sklearn.metrics import adjusted_rand_score as ari
+from scipy.spatial import Delaunay
 
 from itertools import combinations
 from scipy.stats import norm
@@ -137,10 +138,12 @@ def for_loop_function(combo, X_hat, est_labels, true_labels, gclust_model, M):
     
     params, pcov = optimize.curve_fit(func, X_hat[temp_quad_labels, :2], X_hat[temp_quad_labels, 2])
     
-    integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
+    # integral = abs(monte_carlo_integration(X_hat[temp_quad_labels], func, params, M))
+    delly = Delaunay(X_hat[temp_quad_labels ,:-1])
+    content = np.sum([calculate_simplex_content(X_hat[temp_quad_labels][del_]) for del_ in delly.simplices])
     
     quad_log_likelihood = quadratic_log_likelihood(X_hat[temp_quad_labels], params, curve_density=False)
-    quad_log_likelihood -= temp_n * np.log(integral)
+    quad_log_likelihood -= temp_n * np.log(content)
     gmm_log_likelihood = np.sum(gclust.model_.score_samples(X_hat[-temp_quad_labels]))
 
     log_likeli = quad_log_likelihood + gmm_log_likelihood + prop_log_likelihoods
